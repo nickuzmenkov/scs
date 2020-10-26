@@ -158,9 +158,25 @@ def end():
     Selection.Clear()
     ViewHelper.ZoomToEntity()
 
+
 ''' -------------------------------------------------------
 START FROM HERE
 ------------------------------------------------------- '''
+''' -------------------------------------------------------
+define loop parameters
+------------------------------------------------------- '''
+heights = {
+    MM(.1): '10',
+    MM(.2): '20',
+    MM(.3): '30',
+    MM(.4): '40',
+    MM(.5): '50'}
+
+pitches = {
+    MM(5.):  '050',
+    MM(10.): '100',
+    MM(15.): '150'}
+
 ''' -------------------------------------------------------
 define parameters
 ------------------------------------------------------- '''
@@ -169,273 +185,284 @@ RTOL = 1e-3
 
 radius = MM(5.)
 diameter = 2 * radius
-length_all = 100 * diameter
+length_all = 30 * diameter
 length_stb = 10 * diameter
 
-height = MM(.5)
-pitch = MM(10.)
 delta = MM(.48)
-
 split = .74
-ogrid = (radius - height) * split
 
-nsecs = int((length_all - 2 * length_stb)/pitch)
+''' -------------------------------------------------------
+define builder function
+------------------------------------------------------- '''
+
+def builder(height, pitch):
+    
+    delete_all()
+
+    ogrid = (radius - height) * split
+    nsecs = int((length_all - 2 * length_stb)/pitch)
+
+    ''' -------------------------------------------------------
+    create test sections
+    ------------------------------------------------------- '''
+    ''' middle rectangle '''
+    sketch = Sketch(Plane.PlaneXY)
+    sketch.polygon((ogrid, 0, 0), 
+                   (0, ogrid, 0), 
+                   (-ogrid, 0, 0), 
+                   (0, -ogrid, 0))
+    result = sketch.finish()
+    extrude(result, Direction.DirZ, pitch)
+
+    ''' inner part '''
+    sketch = Sketch(Plane.PlaneXY)
+    sketch.polygon((ogrid, 0, 0), 
+                   (0, ogrid, 0), 
+                   (-ogrid, 0, 0), 
+                   (0, -ogrid, 0))
+    frame_1 = frame((0, 0, 0), Direction.DirX, Direction.DirY)
+    sketch.circle(frame_1, radius - height)
+    result = sketch.finish()
+    extrude(result, Direction.DirZ, pitch)
+
+    ''' outer part 3 parts
+    unlike the others is made by revolving aroung line_1 '''
+    line_1 = line((0, 0, 0), Direction.DirZ)
+
+    sketch = Sketch(Plane.PlaneYZ)
+    sketch.polygon(
+        (0, radius - height, 0), 
+        (0, radius, 0), 
+        (0, radius, pitch/2 - delta/2), 
+        (0, radius - height, pitch/2 - delta/2))
+    result = sketch.finish()
+    revolve(result, line_1)
+
+    sketch = Sketch(Plane.PlaneYZ)
+    sketch.polygon(
+        (0, radius - height, pitch/2 - delta/2), 
+        (0, radius, pitch/2 - delta/2), 
+        (0, radius, pitch/2 + delta/2), 
+        (0, radius - height, pitch/2 + delta/2))
+    result = sketch.finish()
+    revolve(result, line_1)
+
+    sketch = Sketch(Plane.PlaneYZ)
+    sketch.polygon(
+        (0, radius - height, pitch/2 + delta/2), 
+        (0, radius, pitch/2 + delta/2), 
+        (0, radius, pitch), 
+        (0, radius - height, pitch))
+    result = sketch.finish()
+    revolve(result, line_1)
+
+    ''' make axial and radial cuts '''
+    cut_axial_1 = datum_plane((0, 0, pitch/2 - delta/2),
+                              Direction.DirX, Direction.DirY)
+    cut_axial_2 = datum_plane((0, 0, pitch/2 + delta/2),
+                              Direction.DirX, Direction.DirY)
+    split_by_plane(GetRootPart().Bodies[0], cut_axial_1)
+    split_by_plane(GetRootPart().Bodies[1], cut_axial_1)
+
+    split_by_plane(GetRootPart().Bodies[5], cut_axial_2)
+    split_by_plane(GetRootPart().Bodies[6], cut_axial_2)
+
+    cut_radial_1 = datum_plane((0, 0, 0),
+                               Direction.DirX, Direction.DirZ)
+    cut_radial_2 = datum_plane((0, 0, 0),
+                               Direction.DirY, Direction.DirZ)
+    split_by_plane(GetRootPart().Bodies[1],  cut_radial_1)
+    split_by_plane(GetRootPart().Bodies[2],  cut_radial_1)
+    split_by_plane(GetRootPart().Bodies[3],  cut_radial_1)
+    split_by_plane(GetRootPart().Bodies[4],  cut_radial_1)
+    split_by_plane(GetRootPart().Bodies[6],  cut_radial_1)
+    split_by_plane(GetRootPart().Bodies[8],  cut_radial_1)
+
+    split_by_plane(GetRootPart().Bodies[1],  cut_radial_2)
+    split_by_plane(GetRootPart().Bodies[2],  cut_radial_2)
+    split_by_plane(GetRootPart().Bodies[3],  cut_radial_2)
+    split_by_plane(GetRootPart().Bodies[4],  cut_radial_2)
+    split_by_plane(GetRootPart().Bodies[6],  cut_radial_2)
+    split_by_plane(GetRootPart().Bodies[8],  cut_radial_2)
+    split_by_plane(GetRootPart().Bodies[9],  cut_radial_2)
+    split_by_plane(GetRootPart().Bodies[10], cut_radial_2)
+    split_by_plane(GetRootPart().Bodies[11], cut_radial_2)
+    split_by_plane(GetRootPart().Bodies[12], cut_radial_2)
+    split_by_plane(GetRootPart().Bodies[13], cut_radial_2)
+    split_by_plane(GetRootPart().Bodies[14], cut_radial_2)
+
+    ''' move to component - translate - copy '''
+    component(GetRootPart().Bodies)
+    test = GetRootPart().Components[-1]
+    test.SetName('test')
+
+    move(test, Direction.DirZ, length_stb)
+
+    for i in range(1, nsecs):
+        copy('test', test, Direction.DirZ, i * pitch)
+
+    
+    ''' -------------------------------------------------------
+    create stabilization sections
+    ------------------------------------------------------- '''
+    ''' middle rectangle '''
+    sketch = Sketch(Plane.PlaneXY)
+    sketch.polygon((ogrid, 0, 0), 
+                   (0, ogrid, 0), 
+                   (-ogrid, 0, 0), 
+                   (0, -ogrid, 0))
+    result = sketch.finish()
+    extrude(result, Direction.DirZ, length_stb)
+
+    ''' inner part '''
+    sketch = Sketch(Plane.PlaneXY)
+    sketch.polygon(
+        (ogrid, 0, 0), 
+        (0, ogrid, 0), 
+        (-ogrid, 0, 0), 
+        (0, -ogrid, 0))
+    frame_1 = frame((0, 0, 0), Direction.DirX, Direction.DirY)
+    sketch.circle(frame_1, radius - height)
+    result = sketch.finish()
+    extrude(result, Direction.DirZ, length_stb)
+
+    ''' outer part by revolving aroung line_1 '''
+    line_1 = line((0, 0, 0), Direction.DirZ)
+
+    sketch = Sketch(Plane.PlaneYZ)
+    sketch.polygon(
+        (0, radius - height, 0), 
+        (0, radius, 0), 
+        (0, radius, length_stb), 
+        (0, radius - height, length_stb))
+    result = sketch.finish()
+    revolve(result, line_1)
+
+    ''' make radial cuts '''
+    split_by_plane(GetRootPart().Bodies[1], cut_radial_1)
+    split_by_plane(GetRootPart().Bodies[2], cut_radial_1)
+
+    split_by_plane(GetRootPart().Bodies[1], cut_radial_2)
+    split_by_plane(GetRootPart().Bodies[2], cut_radial_2)
+    split_by_plane(GetRootPart().Bodies[3], cut_radial_2)
+    split_by_plane(GetRootPart().Bodies[4], cut_radial_2)
+
+    ''' move to component - translate - copy '''
+    component(GetRootPart().Bodies)
+    stab = GetRootPart().Components[-1]
+    stab.SetName('stab')
+
+    copy('stab', stab, Direction.DirZ, 
+         length_stb + nsecs * pitch)
+
+    ''' trash and share topology '''
+    delete(GetRootPart().DatumPlanes)
+    share_topology()
+
+    
+    ''' -------------------------------------------------------
+    create named selections
+    ------------------------------------------------------- '''
+    ''' helpful functions '''
+    def gather_faces(bodies):
+        faces = []
+        for body in bodies:
+            faces += body.Faces
+        return faces
+
+    def gather_edges(bodies):
+        edges = []
+        for body in bodies:
+            for face in body.Faces:
+                edges += face.Edges
+        return edges
+
+    face_up = lambda x: x.GetFaceNormal(0, 0).Z == 1
+    face_dn = lambda x: x.GetFaceNormal(0, 0).Z == -1
+    equals = lambda x, y: abs(x - y)/y <= RTOL
+
+    ''' define the tree '''
+    stab1 = GetRootPart().Components[-2]
+    stab2 = GetRootPart().Components[-1]
+    tests = GetRootPart().Components[:nsecs]
+
+    ''' fluent named selections '''
+    bodies_solid = []
+    bodies_fluid = []
+    for i in range(nsecs):
+        bodies = tests[i].GetBodies()
+        for j in range(27):
+            if j in [3, 11, 17, 23]:
+                bodies_solid.append(bodies[j])
+            else:
+                bodies_fluid.append(bodies[j])
+    for body in stab1.GetBodies() + stab2.GetBodies():
+        bodies_fluid.append(body)
+    named_selection('solid', bodies_solid)
+    named_selection('fluid', bodies_fluid)
+
+    faces_stab_1 = gather_faces(stab1.GetBodies())
+    named_selection_auto('inlet', faces_stab_1, face_dn)
+
+    faces_stab_2 = gather_faces(stab2.GetBodies())
+    named_selection_auto('outlet', faces_stab_2, face_up)
+
+    faces = faces_stab_1 + faces_stab_2
+    area = .5 * math.pi * radius * length_stb
+    named_selection_auto('wall-out', faces, 
+                         lambda x: equals(x.Area, area))
+
+    faces = gather_faces(bodies_solid + bodies_fluid)
+    area = .5 * math.pi * radius * (pitch/2 - delta/2)
+    named_selection_auto('wall-fluid', faces, 
+                         lambda x: equals(x.Area, area))
+
+    faces = gather_faces(bodies_solid)
+    area = .5 * math.pi * radius * delta
+    named_selection_auto('wall-solid', faces,
+                         lambda x: equals(x.Area, area))
+
+    area = .5 * math.pi * (radius - height) * delta
+    named_selection_auto('sides', faces, 
+                         lambda x: face_up(x) or face_dn(x) or
+                         equals(x.Area, area))
+
+    ''' mesher named selections '''
+    edges = gather_edges(bodies_solid + bodies_fluid)
+    length_1 = 2 ** .5 * ogrid
+    length_2 = .5 * math.pi
+    named_selection_auto('tan', edges,
+        lambda x: equals(x.GetInterval().Span, length_1) or
+                  equals(x.GetInterval().Span, length_2))
+
+    length = height
+    named_selection_auto('rad1', edges,
+        lambda x: equals(x.GetInterval().Span, length))
+
+    length = radius - height - ogrid
+    named_selection_auto('rad2', edges,
+        lambda x: equals(x.GetInterval().Span, length))
+
+    length = pitch/2 - delta/2
+    named_selection_auto('axi1', edges,
+        lambda x: equals(x.GetInterval().Span, length))
+
+    named_selection_auto('axi2', edges,
+        lambda x: equals(x.GetInterval().Span, delta))
+
+    named_selection_auto('axi3', edges,
+        lambda x: equals(x.GetInterval().Span, length_stb))
+
+    ''' save everything '''
+    save('C:\\users\\frenc\\yandexdisk\\ans\\geo\\{}-{}'.\
+         format(heights.get(height), pitches.get(pitch)))
+    end()
 
 ''' -------------------------------------------------------
 start modeling
 ------------------------------------------------------- '''
 GetRootPart().SetName('rough-tube')
-delete_all()
 
-''' -------------------------------------------------------
-create test sections
-------------------------------------------------------- '''
-''' middle rectangle '''
-sketch = Sketch(Plane.PlaneXY)
-sketch.polygon((ogrid, 0, 0), 
-               (0, ogrid, 0), 
-               (-ogrid, 0, 0), 
-               (0, -ogrid, 0))
-result = sketch.finish()
-extrude(result, Direction.DirZ, pitch)
-
-''' inner part '''
-sketch = Sketch(Plane.PlaneXY)
-sketch.polygon((ogrid, 0, 0), 
-               (0, ogrid, 0), 
-               (-ogrid, 0, 0), 
-               (0, -ogrid, 0))
-frame_1 = frame((0, 0, 0), Direction.DirX, Direction.DirY)
-sketch.circle(frame_1, radius - height)
-result = sketch.finish()
-extrude(result, Direction.DirZ, pitch)
-
-''' outer part 3 parts
-unlike the others is made by revolving aroung line_1 '''
-line_1 = line((0, 0, 0), Direction.DirZ)
-
-sketch = Sketch(Plane.PlaneYZ)
-sketch.polygon(
-    (0, radius - height, 0), 
-    (0, radius, 0), 
-    (0, radius, pitch/2 - delta/2), 
-    (0, radius - height, pitch/2 - delta/2))
-result = sketch.finish()
-revolve(result, line_1)
-
-sketch = Sketch(Plane.PlaneYZ)
-sketch.polygon(
-    (0, radius - height, pitch/2 - delta/2), 
-    (0, radius, pitch/2 - delta/2), 
-    (0, radius, pitch/2 + delta/2), 
-    (0, radius - height, pitch/2 + delta/2))
-result = sketch.finish()
-revolve(result, line_1)
-
-sketch = Sketch(Plane.PlaneYZ)
-sketch.polygon(
-    (0, radius - height, pitch/2 + delta/2), 
-    (0, radius, pitch/2 + delta/2), 
-    (0, radius, pitch), 
-    (0, radius - height, pitch))
-result = sketch.finish()
-revolve(result, line_1)
-
-''' make axial and radial cuts '''
-cut_axial_1 = datum_plane((0, 0, pitch/2 - delta/2),
-                          Direction.DirX, Direction.DirY)
-cut_axial_2 = datum_plane((0, 0, pitch/2 + delta/2),
-                          Direction.DirX, Direction.DirY)
-split_by_plane(GetRootPart().Bodies[0], cut_axial_1)
-split_by_plane(GetRootPart().Bodies[1], cut_axial_1)
-
-split_by_plane(GetRootPart().Bodies[5], cut_axial_2)
-split_by_plane(GetRootPart().Bodies[6], cut_axial_2)
-
-cut_radial_1 = datum_plane((0, 0, 0),
-                           Direction.DirX, Direction.DirZ)
-cut_radial_2 = datum_plane((0, 0, 0),
-                           Direction.DirY, Direction.DirZ)
-split_by_plane(GetRootPart().Bodies[1],  cut_radial_1)
-split_by_plane(GetRootPart().Bodies[2],  cut_radial_1)
-split_by_plane(GetRootPart().Bodies[3],  cut_radial_1)
-split_by_plane(GetRootPart().Bodies[4],  cut_radial_1)
-split_by_plane(GetRootPart().Bodies[6],  cut_radial_1)
-split_by_plane(GetRootPart().Bodies[8],  cut_radial_1)
-
-split_by_plane(GetRootPart().Bodies[1],  cut_radial_2)
-split_by_plane(GetRootPart().Bodies[2],  cut_radial_2)
-split_by_plane(GetRootPart().Bodies[3],  cut_radial_2)
-split_by_plane(GetRootPart().Bodies[4],  cut_radial_2)
-split_by_plane(GetRootPart().Bodies[6],  cut_radial_2)
-split_by_plane(GetRootPart().Bodies[8],  cut_radial_2)
-split_by_plane(GetRootPart().Bodies[9],  cut_radial_2)
-split_by_plane(GetRootPart().Bodies[10], cut_radial_2)
-split_by_plane(GetRootPart().Bodies[11], cut_radial_2)
-split_by_plane(GetRootPart().Bodies[12], cut_radial_2)
-split_by_plane(GetRootPart().Bodies[13], cut_radial_2)
-split_by_plane(GetRootPart().Bodies[14], cut_radial_2)
-
-''' move to component - translate - copy '''
-component(GetRootPart().Bodies)
-test = GetRootPart().Components[-1]
-test.SetName('test')
-
-move(test, Direction.DirZ, length_stb)
-
-for i in range(1, nsecs):
-    copy('test', test, Direction.DirZ, i * pitch)
-
-''' -------------------------------------------------------
-create stabilization sections
-------------------------------------------------------- '''
-''' middle rectangle '''
-sketch = Sketch(Plane.PlaneXY)
-sketch.polygon((ogrid, 0, 0), 
-               (0, ogrid, 0), 
-               (-ogrid, 0, 0), 
-               (0, -ogrid, 0))
-result = sketch.finish()
-extrude(result, Direction.DirZ, length_stb)
-
-''' inner part '''
-sketch = Sketch(Plane.PlaneXY)
-sketch.polygon(
-    (ogrid, 0, 0), 
-    (0, ogrid, 0), 
-    (-ogrid, 0, 0), 
-    (0, -ogrid, 0))
-frame_1 = frame((0, 0, 0), Direction.DirX, Direction.DirY)
-sketch.circle(frame_1, radius - height)
-result = sketch.finish()
-extrude(result, Direction.DirZ, length_stb)
-
-''' outer part by revolving aroung line_1 '''
-line_1 = line((0, 0, 0), Direction.DirZ)
-
-sketch = Sketch(Plane.PlaneYZ)
-sketch.polygon(
-    (0, radius - height, 0), 
-    (0, radius, 0), 
-    (0, radius, length_stb), 
-    (0, radius - height, length_stb))
-result = sketch.finish()
-revolve(result, line_1)
-
-''' make radial cuts '''
-split_by_plane(GetRootPart().Bodies[1], cut_radial_1)
-split_by_plane(GetRootPart().Bodies[2], cut_radial_1)
-
-split_by_plane(GetRootPart().Bodies[1], cut_radial_2)
-split_by_plane(GetRootPart().Bodies[2], cut_radial_2)
-split_by_plane(GetRootPart().Bodies[3], cut_radial_2)
-split_by_plane(GetRootPart().Bodies[4], cut_radial_2)
-
-''' move to component - translate - copy '''
-component(GetRootPart().Bodies)
-stab = GetRootPart().Components[-1]
-stab.SetName('stab')
-
-copy('stab', stab, Direction.DirZ, 
-     length_stb + nsecs * pitch)
-
-''' trash and share topology '''
-delete(GetRootPart().DatumPlanes)
-share_topology()
-
-''' -------------------------------------------------------
-create named selections
-------------------------------------------------------- '''
-''' helpful functions '''
-def gather_faces(bodies):
-    faces = []
-    for body in bodies:
-        faces += body.Faces
-    return faces
-
-def gather_edges(bodies):
-    edges = []
-    for body in bodies:
-        for face in body.Faces:
-            edges += face.Edges
-    return edges
-
-face_up = lambda x: x.GetFaceNormal(0, 0).Z == 1
-face_dn = lambda x: x.GetFaceNormal(0, 0).Z == -1
-equals = lambda x, y: abs(x - y)/y <= RTOL
-
-''' define the tree '''
-stab1 = GetRootPart().Components[-2]
-stab2 = GetRootPart().Components[-1]
-tests = GetRootPart().Components[:nsecs]
-
-''' fluent named selections '''
-bodies_solid = []
-bodies_fluid = []
-for i in range(nsecs):
-    bodies = tests[i].GetBodies()
-    for j in range(27):
-        if j in [3, 11, 17, 23]:
-            bodies_solid.append(bodies[j])
-        else:
-            bodies_fluid.append(bodies[j])
-for body in stab1.GetBodies() + stab2.GetBodies():
-    bodies_fluid.append(body)
-named_selection('solid', bodies_solid)
-named_selection('fluid', bodies_fluid)
-
-faces_stab_1 = gather_faces(stab1.GetBodies())
-named_selection_auto('inlet', faces_stab_1, face_dn)
-
-faces_stab_2 = gather_faces(stab2.GetBodies())
-named_selection_auto('outlet', faces_stab_2, face_up)
-
-faces = faces_stab_1 + faces_stab_2
-area = .5 * math.pi * radius * length_stb
-named_selection_auto('wall-out', faces, 
-                     lambda x: equals(x.Area, area))
-
-faces = gather_faces(bodies_solid + bodies_fluid)
-area = .5 * math.pi * radius * (pitch/2 - delta/2)
-named_selection_auto('wall-fluid', faces, 
-                     lambda x: equals(x.Area, area))
-
-faces = gather_faces(bodies_solid)
-area = .5 * math.pi * radius * delta
-named_selection_auto('wall-solid', faces,
-                     lambda x: equals(x.Area, area))
-
-area = .5 * math.pi * (radius - height) * delta
-named_selection_auto('sides', faces, 
-                     lambda x: face_up(x) or face_dn(x) or
-                     equals(x.Area, area))
-
-''' mesher named selections '''
-edges = gather_edges(bodies_solid + bodies_fluid)
-length_1 = 2 ** .5 * ogrid
-length_2 = .5 * math.pi
-named_selection_auto('tan', edges,
-    lambda x: equals(x.GetInterval().Span, length_1) or
-              equals(x.GetInterval().Span, length_2))
-
-length = height
-named_selection_auto('rad1', edges,
-    lambda x: equals(x.GetInterval().Span, length))
-
-length = radius - height - ogrid
-named_selection_auto('rad2', edges,
-    lambda x: equals(x.GetInterval().Span, length))
-
-length = pitch/2 - delta/2
-named_selection_auto('axi1', edges,
-    lambda x: equals(x.GetInterval().Span, length))
-
-named_selection_auto('axi2', edges,
-    lambda x: equals(x.GetInterval().Span, delta))
-
-named_selection_auto('axi3', edges,
-    lambda x: equals(x.GetInterval().Span, length_stb))
-
-save('C:\\users\\frenc\\yandexdisk\\ans\\geo\\{}-{}'.\
-     format(height, pitch))
-end()
+for pitch in pitches.keys():
+    for height in heights.keys():
+        builder(height, pitch)
