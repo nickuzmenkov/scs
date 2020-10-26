@@ -169,8 +169,8 @@ RTOL = 1e-3
 
 radius = MM(5.)
 diameter = 2 * radius
-length_all = 10 * diameter
-length_stb = 1 * diameter
+length_all = 100 * diameter
+length_stb = 10 * diameter
 
 height = MM(.5)
 pitch = MM(10.)
@@ -416,8 +416,7 @@ length_1 = 2 ** .5 * ogrid
 length_2 = .5 * math.pi
 named_selection_auto('tan', edges,
     lambda x: equals(x.GetInterval().Span, length_1) or
-              equals(x.GetInterval().Span, length_2) or 
-              equals(x.GetInterval().Span, length_3))
+              equals(x.GetInterval().Span, length_2))
 
 length = height
 named_selection_auto('rad1', edges,
@@ -437,4 +436,6 @@ named_selection_auto('axi2', edges,
 named_selection_auto('axi3', edges,
     lambda x: equals(x.GetInterval().Span, length_stb))
 
+save('C:\\users\\frenc\\yandexdisk\\ans\\geo\\{}-{}'.\
+     format(height, pitch))
 end()
