@@ -143,7 +143,7 @@ def delete_all():
            GetRootPart().DatumLines,
            GetRootPart().DatumPoints)
 
-def share_topology(tolerance=MM(.2)):
+def share_topology(tolerance=MM(.1)):
     options = ShareTopologyOptions()
     options.Tolerance = tolerance
     options.PreserveInstances = False
@@ -154,7 +154,7 @@ def save(path):
     options = ExportOptions.Create()
     DocumentSave.Execute(path, options)
 
-def end():
+def zoom():
     Selection.Clear()
     ViewHelper.ZoomToEntity()
 
@@ -180,7 +180,7 @@ pitches = {
 ''' -------------------------------------------------------
 define parameters
 ------------------------------------------------------- '''
-TOL = MM(.2)
+TOL = MM(.05)
 RTOL = 1e-3
 
 radius = MM(5.)
@@ -356,8 +356,9 @@ def builder(height, pitch):
          length_stb + nsecs * pitch)
 
     ''' trash and share topology '''
+    zoom()
     delete(GetRootPart().DatumPlanes)
-    share_topology()
+    share_topology(TOL)
 
     
     ''' -------------------------------------------------------
@@ -454,15 +455,15 @@ def builder(height, pitch):
         lambda x: equals(x.GetInterval().Span, length_stb))
 
     ''' save everything '''
-    save('C:\\users\\frenc\\yandexdisk\\ans\\geo\\{}-{}'.\
+    save('C:\\users\\frenc\\yandexdisk\\cfd\\geo\\{}-{}'.\
          format(heights.get(height), pitches.get(pitch)))
-    end()
 
 ''' -------------------------------------------------------
 start modeling
 ------------------------------------------------------- '''
 GetRootPart().SetName('rough-tube')
 
-for pitch in pitches.keys():
-    for height in heights.keys():
-        builder(height, pitch)
+# for pitch in pitches.keys():
+pitch = MM(10)
+for height in heights.keys():
+	builder(height, pitch)
