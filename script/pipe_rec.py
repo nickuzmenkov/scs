@@ -185,7 +185,7 @@ RTOL = 1e-3
 
 radius = MM(5.)
 diameter = 2 * radius
-length_all = 30 * diameter
+length_all = 100 * diameter
 length_stb = 10 * diameter
 
 delta = MM(.48)
