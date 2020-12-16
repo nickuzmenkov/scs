@@ -1,8 +1,8 @@
 import math
 
-''' -------------------------------------------------------
-sketching 2D operations
-------------------------------------------------------- '''
+# ---------------------------------------------------------
+# sketching 2D operations
+# ---------------------------------------------------------
 class Sketch():
 
     def __init__(self, plane):
@@ -28,9 +28,9 @@ class Sketch():
     def finish(self):
         return PlanarBody.Create(self.plane, self.curves).CreatedBody.Faces[0]
 
-''' -------------------------------------------------------
-primitives
-------------------------------------------------------- '''
+# ---------------------------------------------------------
+# primitives
+# ---------------------------------------------------------
 def point((x, y, z)):
     return Point.Create(x, y, z)
 
@@ -58,9 +58,9 @@ def datum_plane(dot, dir1, dir2, name='default'):
 def select(item):
     return Selection.Create(item)
 
-''' -------------------------------------------------------
-manipulating operations
-------------------------------------------------------- '''
+# ---------------------------------------------------------
+# manipulating operations
+# ---------------------------------------------------------
 def revolve(face, axis, angle=DEG(360), merge=False):
     options = RevolveFaceOptions()
     options.ExtrudeType = ExtrudeType.ForceIndependent
@@ -89,19 +89,18 @@ def sweep(face, curve, merge=False):
     options.Select = True
     Sweep.Execute(face, curve, options)
 
-def move(item, direction, length):
-    options = MoveOptions()
-    Move.Translate(select(item), direction, length, 
-                   options)
+def move(item, (x, y, z)):
+    matrix = Matrix.CreateTranslation(Vector.Create(x, y, z))
+    item.Transform(matrix)
 
-def copy(name, item, direction, length):
+def copy(name, item, (x, y, z)):
     Copy.ToClipboard(select(item))
     new = Paste.FromClipboard().CreatedObjects[0]
-    move(new, direction, length)
+    move(new, (x, y, z))
     new.SetName(name)
 
 def split_by_plane(body, cutter):
-    SplitBody.ByCutter(select(body), select(cutter))
+    SplitBody.Execute(select(body), select(cutter))
 
 def split_by_face(body, cutter):
     SplitBody.ByCutter(select(body), select(cutter), True)
@@ -112,25 +111,38 @@ def merge_bodies(bodies):
 def component(bodies):
     ComponentHelper.MoveBodiesToComponent(select(bodies))
 
-''' -------------------------------------------------------
-named selections operations
-------------------------------------------------------- '''
-def named_selection(name, items):
+# ---------------------------------------------------------
+# named selections operations
+# ---------------------------------------------------------
+def named_selection(name, items, desc=None):
+    if desc:
+        items = [x for x, d in zip(items, desc) if d]        
     select = Selection.Create(items)
     NamedSelection.Create(select, Selection.Empty())
-    NamedSelection.Rename('Группа1', name)
+    NamedSelection.Rename('Group1', name)
 
-def named_selection_auto(name, items, condition):
-    temp = []
-    for item in items:
-        if condition(item):
-            temp.append(item)
-    named_selection(name, temp)
-    return temp
+def equals(x, y):
+    if y != 0:
+        return abs(x - y)/y <= 1e-3
+    else:
+        return abs(x) <= 1e-3
 
-''' -------------------------------------------------------
-finishing operations
-------------------------------------------------------- '''
+def gather_faces(bodies):
+    faces = []
+    for body in bodies:
+        faces += body.Faces
+    return faces
+
+def gather_edges(bodies):
+    edges = []
+    for body in bodies:
+        for face in body.Faces:
+            edges += face.Edges
+    return edges
+
+# ---------------------------------------------------------
+# finishing operations
+# ---------------------------------------------------------
 def delete(*args):
     for item in args:
         if item:
@@ -146,7 +158,6 @@ def delete_all():
 def share_topology(tolerance=MM(.1)):
     options = ShareTopologyOptions()
     options.Tolerance = tolerance
-    options.PreserveInstances = False
     ShareTopology.FindAndFix(options)
 
 def save(path):
@@ -159,53 +170,36 @@ def zoom():
     ViewHelper.ZoomToEntity()
 
 
-''' -------------------------------------------------------
-START FROM HERE
-------------------------------------------------------- '''
-''' -------------------------------------------------------
-define loop parameters
-------------------------------------------------------- '''
-heights = {
-    MM(.1): '10',
-    MM(.2): '20',
-    MM(.3): '30',
-    MM(.4): '40',
-    MM(.5): '50'}
-
-pitches = {
-    MM(5.):  '050',
-    MM(10.): '100',
-    MM(15.): '150'}
-
-''' -------------------------------------------------------
-define parameters
-------------------------------------------------------- '''
-TOL = MM(.05)
-RTOL = 1e-3
+# ---------------------------------------------------------
+# START FROM HERE
+# ---------------------------------------------------------
+# ---------------------------------------------------------
+# define parameters
+# ---------------------------------------------------------
+TOL = MM(.01)
 
 radius = MM(5.)
 diameter = 2 * radius
-length_all = 100 * diameter
+length_all = 22 * diameter
 length_stb = 10 * diameter
 
 delta = MM(.48)
 split = .74
 
-''' -------------------------------------------------------
-define builder function
-------------------------------------------------------- '''
-
+# ---------------------------------------------------------
+# define builder function
+# ---------------------------------------------------------
 def builder(height, pitch):
     
     delete_all()
 
     ogrid = (radius - height) * split
-    nsecs = int((length_all - 2 * length_stb)/pitch)
+    nsecs = int(round((length_all - 2 * length_stb)/pitch))
 
-    ''' -------------------------------------------------------
-    create test sections
-    ------------------------------------------------------- '''
-    ''' middle rectangle '''
+    # ---------------------------------------------------------
+    # create test sections
+    # ---------------------------------------------------------
+    # middle rectangle
     sketch = Sketch(Plane.PlaneXY)
     sketch.polygon((ogrid, 0, 0), 
                    (0, ogrid, 0), 
@@ -214,7 +208,7 @@ def builder(height, pitch):
     result = sketch.finish()
     extrude(result, Direction.DirZ, pitch)
 
-    ''' inner part '''
+    # inner part
     sketch = Sketch(Plane.PlaneXY)
     sketch.polygon((ogrid, 0, 0), 
                    (0, ogrid, 0), 
@@ -225,8 +219,8 @@ def builder(height, pitch):
     result = sketch.finish()
     extrude(result, Direction.DirZ, pitch)
 
-    ''' outer part 3 parts
-    unlike the others is made by revolving aroung line_1 '''
+    # outer part 3 parts
+    # unlike the others is made by revolving aroung line_1
     line_1 = line((0, 0, 0), Direction.DirZ)
 
     sketch = Sketch(Plane.PlaneYZ)
@@ -256,7 +250,7 @@ def builder(height, pitch):
     result = sketch.finish()
     revolve(result, line_1)
 
-    ''' make axial and radial cuts '''
+    # make axial and radial cuts
     cut_axial_1 = datum_plane((0, 0, pitch/2 - delta/2),
                               Direction.DirX, Direction.DirY)
     cut_axial_2 = datum_plane((0, 0, pitch/2 + delta/2),
@@ -291,21 +285,21 @@ def builder(height, pitch):
     split_by_plane(GetRootPart().Bodies[13], cut_radial_2)
     split_by_plane(GetRootPart().Bodies[14], cut_radial_2)
 
-    ''' move to component - translate - copy '''
+    # move to component - translate - copy
     component(GetRootPart().Bodies)
     test = GetRootPart().Components[-1]
     test.SetName('test')
 
-    move(test, Direction.DirZ, length_stb)
+    move(test, (0, 0,length_stb))
 
     for i in range(1, nsecs):
-        copy('test', test, Direction.DirZ, i * pitch)
+        copy('test', test, (0, 0, i * pitch))
 
     
-    ''' -------------------------------------------------------
-    create stabilization sections
-    ------------------------------------------------------- '''
-    ''' middle rectangle '''
+    # ---------------------------------------------------------
+    # create stabilization sections
+    # ---------------------------------------------------------
+    # middle rectangle
     sketch = Sketch(Plane.PlaneXY)
     sketch.polygon((ogrid, 0, 0), 
                    (0, ogrid, 0), 
@@ -314,7 +308,7 @@ def builder(height, pitch):
     result = sketch.finish()
     extrude(result, Direction.DirZ, length_stb)
 
-    ''' inner part '''
+    # inner part
     sketch = Sketch(Plane.PlaneXY)
     sketch.polygon(
         (ogrid, 0, 0), 
@@ -326,7 +320,7 @@ def builder(height, pitch):
     result = sketch.finish()
     extrude(result, Direction.DirZ, length_stb)
 
-    ''' outer part by revolving aroung line_1 '''
+    # outer part by revolving aroung line_1
     line_1 = line((0, 0, 0), Direction.DirZ)
 
     sketch = Sketch(Plane.PlaneYZ)
@@ -338,7 +332,7 @@ def builder(height, pitch):
     result = sketch.finish()
     revolve(result, line_1)
 
-    ''' make radial cuts '''
+    # make radial cuts
     split_by_plane(GetRootPart().Bodies[1], cut_radial_1)
     split_by_plane(GetRootPart().Bodies[2], cut_radial_1)
 
@@ -347,47 +341,27 @@ def builder(height, pitch):
     split_by_plane(GetRootPart().Bodies[3], cut_radial_2)
     split_by_plane(GetRootPart().Bodies[4], cut_radial_2)
 
-    ''' move to component - translate - copy '''
+    # move to component - translate - copy
     component(GetRootPart().Bodies)
     stab = GetRootPart().Components[-1]
     stab.SetName('stab')
 
-    copy('stab', stab, Direction.DirZ, 
-         length_stb + nsecs * pitch)
+    copy('stab', stab, (0, 0, length_stb + nsecs * pitch))
 
-    ''' trash and share topology '''
+    # trash and share topology
     zoom()
     delete(GetRootPart().DatumPlanes)
     share_topology(TOL)
-
     
-    ''' -------------------------------------------------------
-    create named selections
-    ------------------------------------------------------- '''
-    ''' helpful functions '''
-    def gather_faces(bodies):
-        faces = []
-        for body in bodies:
-            faces += body.Faces
-        return faces
-
-    def gather_edges(bodies):
-        edges = []
-        for body in bodies:
-            for face in body.Faces:
-                edges += face.Edges
-        return edges
-
-    face_up = lambda x: x.GetFaceNormal(0, 0).Z == 1
-    face_dn = lambda x: x.GetFaceNormal(0, 0).Z == -1
-    equals = lambda x, y: abs(x - y)/y <= RTOL
-
-    ''' define the tree '''
+    # ---------------------------------------------------------
+    # create named selections
+    # ---------------------------------------------------------
+    # define the tree
     stab1 = GetRootPart().Components[-2]
     stab2 = GetRootPart().Components[-1]
     tests = GetRootPart().Components[:nsecs]
 
-    ''' fluent named selections '''
+    # fluent named selections
     bodies_solid = []
     bodies_fluid = []
     for i in range(nsecs):
@@ -403,67 +377,61 @@ def builder(height, pitch):
     named_selection('fluid', bodies_fluid)
 
     faces_stab_1 = gather_faces(stab1.GetBodies())
-    named_selection_auto('inlet', faces_stab_1, face_dn)
+    desc = [equals(x.MidPoint().Point.Z, 0) for x in faces_stab_1]
+    named_selection('inlet', faces_stab_1, desc)
 
     faces_stab_2 = gather_faces(stab2.GetBodies())
-    named_selection_auto('outlet', faces_stab_2, face_up)
+    desc = [equals(x.MidPoint().Point.Z, 2 * length_stb + nsecs * pitch) for x in faces_stab_2]
+    named_selection('outlet', faces_stab_2, desc)
 
     faces = faces_stab_1 + faces_stab_2
     area = .5 * math.pi * radius * length_stb
-    named_selection_auto('wall-out', faces, 
-                         lambda x: equals(x.Area, area))
+    desc = [equals(x.Area, area) for x in faces]
+    named_selection('wall-out', faces, desc)
 
     faces = gather_faces(bodies_solid + bodies_fluid)
     area = .5 * math.pi * radius * (pitch/2 - delta/2)
-    named_selection_auto('wall-fluid', faces, 
-                         lambda x: equals(x.Area, area))
+    desc = [equals(x.Area, area) for x in faces]
+    named_selection('wall-fluid', faces, desc)
 
     faces = gather_faces(bodies_solid)
     area = .5 * math.pi * radius * delta
-    named_selection_auto('wall-solid', faces,
-                         lambda x: equals(x.Area, area))
+    desc = [equals(x.Area, area) for x in faces]
+    named_selection('wall-solid', faces, desc)
 
     area = .5 * math.pi * (radius - height) * delta
-    named_selection_auto('sides', faces, 
-                         lambda x: face_up(x) or face_dn(x) or
-                         equals(x.Area, area))
+    desc = [x.Evaluate(0, 0).Normal.Z != 0 or equals(x.Area, area) for x in faces]
+    named_selection('sides', faces, desc)
 
-    ''' mesher named selections '''
+    # mesher named selections
     edges = gather_edges(bodies_solid + bodies_fluid)
+    spans = [x.GetInterval().Span for x in edges]
     length_1 = 2 ** .5 * ogrid
     length_2 = .5 * math.pi
-    named_selection_auto('tan', edges,
-        lambda x: equals(x.GetInterval().Span, length_1) or
-                  equals(x.GetInterval().Span, length_2))
+    desc = [equals(x, length_1) or equals(x, length_2) for x in spans]
+    named_selection('tan', edges, desc)
 
     length = height
-    named_selection_auto('rad1', edges,
-        lambda x: equals(x.GetInterval().Span, length))
+    desc = [equals(x, length) for x in spans]
+    named_selection('rad1', edges, desc)
 
     length = radius - height - ogrid
-    named_selection_auto('rad2', edges,
-        lambda x: equals(x.GetInterval().Span, length))
+    desc = [equals(x, length) for x in spans]
+    named_selection('rad2', edges, desc)
 
     length = pitch/2 - delta/2
-    named_selection_auto('axi1', edges,
-        lambda x: equals(x.GetInterval().Span, length))
+    desc = [equals(x, length) for x in spans]
+    named_selection('axi1', edges, desc)
 
-    named_selection_auto('axi2', edges,
-        lambda x: equals(x.GetInterval().Span, delta))
+    desc = [equals(x, delta) for x in spans]
+    named_selection('axi2', edges, desc)
 
-    named_selection_auto('axi3', edges,
-        lambda x: equals(x.GetInterval().Span, length_stb))
+    desc = [equals(x, length_stb) for x in spans]
+    named_selection('axi3', edges, desc)
 
-    ''' save everything '''
-    save('C:\\users\\frenc\\yandexdisk\\cfd\\geo\\{}-{}'.\
-         format(heights.get(height), pitches.get(pitch)))
-
-''' -------------------------------------------------------
-start modeling
-------------------------------------------------------- '''
-GetRootPart().SetName('rough-tube')
-
-# for pitch in pitches.keys():
-pitch = MM(10)
-for height in heights.keys():
-	builder(height, pitch)
+# ---------------------------------------------------------
+# start modeling
+# ---------------------------------------------------------
+height = MM(Parameters.height)
+pitch = MM(Parameters.pitch)
+builder(height, pitch)

@@ -115,18 +115,28 @@ def component(bodies):
 ''' -------------------------------------------------------
 named selections operations
 ------------------------------------------------------- '''
-def named_selection(name, items):
-    select = Selection.Create(items)
-    NamedSelection.Create(select, Selection.Empty())
-    NamedSelection.Rename('Группа1', name)
-
-def named_selection_auto(name, items, condition):
+def named_selection(name, items, condition=lambda x: True):
     temp = []
     for item in items:
         if condition(item):
             temp.append(item)
-    named_selection(name, temp)
+    select = Selection.Create(temp)
+    NamedSelection.Create(select, Selection.Empty())
+    NamedSelection.Rename('Группа1', name)
     return temp
+
+def gather_faces(bodies):
+    faces = []
+    for body in bodies:
+        faces += body.Faces
+    return faces
+
+def gather_edges(bodies):
+    edges = []
+    for body in bodies:
+        for face in body.Faces:
+            edges += face.Edges
+    return edges
 
 ''' -------------------------------------------------------
 finishing operations
@@ -175,128 +185,126 @@ length_stb = 10 * diameter
 length_tst = length_all - 2 * length_stb
 
 split = .74
-ogrid = radius * split
+
+''' -------------------------------------------------------
+define builder function
+------------------------------------------------------- '''
+
+def builder():
+
+    delete_all()
+    GetRootPart().SetName('pipe')
+
+    ogrid = radius * split
+
+    ''' -------------------------------------------------------
+    create all at once
+    ------------------------------------------------------- '''
+    ''' middle rectangle '''
+    sketch = Sketch(Plane.PlaneXY)
+    sketch.polygon((ogrid, 0, 0), 
+                   (0, ogrid, 0), 
+                   (-ogrid, 0, 0), 
+                   (0, -ogrid, 0))
+    result = sketch.finish()
+    extrude(result, Direction.DirZ, length_all - length_stb)
+
+    ''' outer part '''
+    sketch = Sketch(Plane.PlaneXY)
+    sketch.polygon((ogrid, 0, 0), 
+                   (0, ogrid, 0), 
+                   (-ogrid, 0, 0), 
+                   (0, -ogrid, 0))
+    frame_1 = frame((0, 0, 0), Direction.DirX, Direction.DirY)
+    sketch.circle(frame_1, radius)
+    result = sketch.finish()
+    extrude(result, Direction.DirZ, length_all - length_stb)
+
+    ''' make axial and radial cuts '''
+    cut_radial_1 = datum_plane((0, 0, 0),
+                               Direction.DirX, Direction.DirZ)
+    cut_radial_2 = datum_plane((0, 0, 0),
+                               Direction.DirY, Direction.DirZ)
+    split_by_plane(GetRootPart().Bodies[1], cut_radial_1)
+    split_by_plane(GetRootPart().Bodies[1], cut_radial_2)
+    split_by_plane(GetRootPart().Bodies[2], cut_radial_2)
+
+    cut_axial = datum_plane((0, 0, length_stb),
+                            Direction.DirX, Direction.DirY)
+    for body in GetRootPart().Bodies:
+        split_by_plane(body, cut_axial)
+
+    ''' form components - copy '''
+    component(GetRootPart().Bodies[5:])
+    component(GetRootPart().Bodies[:5])
+
+    copy('stab', GetRootPart().Components[-1], Direction.DirZ,
+         length_all - length_stb)
+
+    ''' trash and share topology '''
+    zoom()
+    delete(GetRootPart().DatumPlanes)
+    share_topology(TOL)
+
+    ''' -------------------------------------------------------
+    create named selections
+    ------------------------------------------------------- '''
+    ''' helpful functions '''
+    face_up = lambda x: x.GetFaceNormal(0, 0).Z == 1
+    face_dn = lambda x: x.GetFaceNormal(0, 0).Z == -1
+    equals = lambda x, y: abs(x - y)/y <= RTOL
+
+    ''' define the tree '''
+    test  = GetRootPart().Components[0]
+    stab1 = GetRootPart().Components[1]
+    stab2 = GetRootPart().Components[2]
+
+    test.SetName('test')
+    stab1.SetName('stab')
+    stab2.SetName('stab')
+
+    ''' fluent named selections '''
+    bodies = stab1.GetBodies() + stab2.GetBodies() + \
+             test.GetBodies()
+    named_selection('fluid', bodies)
+
+    faces_stab_1 = gather_faces(stab1.GetBodies())
+    named_selection('inlet', faces_stab_1, face_dn)
+
+    faces_stab_2 = gather_faces(stab2.GetBodies())
+    named_selection('outlet', faces_stab_2, face_up)
+
+    faces = faces_stab_1 + faces_stab_2
+    area = .5 * math.pi * radius * length_stb
+    named_selection('wall-out', faces, 
+                         lambda x: equals(x.Area, area))
+
+    faces = gather_faces(bodies)
+    area = .5 * math.pi * radius * length_tst
+    named_selection('wall', faces, 
+                         lambda x: equals(x.Area, area))
+
+    ''' mesher named selections '''
+    edges = gather_edges(bodies)
+    length_1 = 2 ** .5 * ogrid
+    length_2 = .5 * math.pi
+    named_selection('tan', edges,
+        lambda x: equals(x.GetInterval().Span, length_1) or
+                  equals(x.GetInterval().Span, length_2))
+
+    named_selection('rad', edges,
+        lambda x: equals(x.GetInterval().Span, radius - ogrid))
+
+    named_selection('axi1', edges,
+        lambda x: equals(x.GetInterval().Span, length_tst))
+
+    named_selection('axi2', edges,
+        lambda x: equals(x.GetInterval().Span, length_stb))
+
+    ''' save everything '''
+    save('C:\\users\\frenc\\yandexdisk\\cfd\\geo\\3F-00-000')
 
 ''' -------------------------------------------------------
 start modeling
 ------------------------------------------------------- '''
-
-delete_all()
-GetRootPart().SetName('pipe')
-
-''' middle rectangle '''
-sketch = Sketch(Plane.PlaneXY)
-sketch.polygon((ogrid, 0, 0), 
-               (0, ogrid, 0), 
-               (-ogrid, 0, 0), 
-               (0, -ogrid, 0))
-result = sketch.finish()
-extrude(result, Direction.DirZ, length_all - length_stb)
-
-''' outer part '''
-sketch = Sketch(Plane.PlaneXY)
-sketch.polygon((ogrid, 0, 0), 
-               (0, ogrid, 0), 
-               (-ogrid, 0, 0), 
-               (0, -ogrid, 0))
-frame_1 = frame((0, 0, 0), Direction.DirX, Direction.DirY)
-sketch.circle(frame_1, radius)
-result = sketch.finish()
-extrude(result, Direction.DirZ, length_all - length_stb)
-
-''' make axial and radial cuts '''
-cut_radial_1 = datum_plane((0, 0, 0),
-                           Direction.DirX, Direction.DirZ)
-cut_radial_2 = datum_plane((0, 0, 0),
-                           Direction.DirY, Direction.DirZ)
-split_by_plane(GetRootPart().Bodies[1], cut_radial_1)
-split_by_plane(GetRootPart().Bodies[1], cut_radial_2)
-split_by_plane(GetRootPart().Bodies[2], cut_radial_2)
-
-cut_axial = datum_plane((0, 0, length_stb),
-                        Direction.DirX, Direction.DirY)
-for body in GetRootPart().Bodies:
-    split_by_plane(body, cut_axial)
-
-''' form components - copy '''
-component(GetRootPart().Bodies[5:])
-component(GetRootPart().Bodies[:5])
-
-copy('stab', GetRootPart().Components[-1], Direction.DirZ,
-     length_all - length_stb)
-
-''' trash and share topology '''
-zoom()
-delete(GetRootPart().DatumPlanes)
-share_topology(TOL)
-
-''' -------------------------------------------------------
-create named selections
-------------------------------------------------------- '''
-''' helpful functions '''
-def gather_faces(bodies):
-    faces = []
-    for body in bodies:
-        faces += body.Faces
-    return faces
-
-def gather_edges(bodies):
-    edges = []
-    for body in bodies:
-        for face in body.Faces:
-            edges += face.Edges
-    return edges
-
-face_up = lambda x: x.GetFaceNormal(0, 0).Z == 1
-face_dn = lambda x: x.GetFaceNormal(0, 0).Z == -1
-equals = lambda x, y: abs(x - y)/y <= RTOL
-
-''' define the tree '''
-test  = GetRootPart().Components[0]
-stab1 = GetRootPart().Components[1]
-stab2 = GetRootPart().Components[2]
-
-test.SetName('test')
-stab1.SetName('stab')
-stab2.SetName('stab')
-
-''' fluent named selections '''
-bodies = stab1.GetBodies() + stab2.GetBodies() + \
-         test.GetBodies()
-named_selection('fluid', bodies)
-
-faces_stab_1 = gather_faces(stab1.GetBodies())
-named_selection_auto('inlet', faces_stab_1, face_dn)
-
-faces_stab_2 = gather_faces(stab2.GetBodies())
-named_selection_auto('outlet', faces_stab_2, face_up)
-
-faces = faces_stab_1 + faces_stab_2
-area = .5 * math.pi * radius * length_stb
-named_selection_auto('wall-out', faces, 
-                     lambda x: equals(x.Area, area))
-
-faces = gather_faces(bodies)
-area = .5 * math.pi * radius * length_tst
-named_selection_auto('wall', faces, 
-                     lambda x: equals(x.Area, area))
-
-''' mesher named selections '''
-edges = gather_edges(bodies)
-length_1 = 2 ** .5 * ogrid
-length_2 = .5 * math.pi
-named_selection_auto('tan', edges,
-    lambda x: equals(x.GetInterval().Span, length_1) or
-              equals(x.GetInterval().Span, length_2))
-
-named_selection_auto('rad', edges,
-    lambda x: equals(x.GetInterval().Span, radius - ogrid))
-
-named_selection_auto('axi1', edges,
-    lambda x: equals(x.GetInterval().Span, length_tst))
-
-named_selection_auto('axi2', edges,
-    lambda x: equals(x.GetInterval().Span, length_stb))
-
-''' save everything '''
-save('C:\\users\\frenc\\yandexdisk\\cfd\\geo\\00-000')
+builder()
